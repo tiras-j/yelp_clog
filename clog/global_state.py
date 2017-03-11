@@ -72,6 +72,30 @@ def reset_default_loggers():
     loggers = None
 
 
+def _maybe_uwsgi(func):
+    """
+    Decorator which conditionally constructs a uwsgi mulefunc object
+    targeting the provided function. If successful returns a wrapper
+    which decides whom to dispatch to (normal or mule) at run time based
+    on the config. Unfortunately this dynamic disptach is necessary since
+    we don't know at load time what configs we'll be provided.
+    """
+    try:
+        import uwsgidecorators
+        import functools
+    except ImportError:
+        return func
+    uwsgi_mule_func = uwsgidecorators.mulefunc(1)(func)
+
+    @functools.wraps(func)
+    def lazy_decider(*args, **kwargs):
+        if config.uwsgi_enable_offload:
+            return uwsgi_mule_func(*args, **kwargs)
+        return func(*args, **kwargs)
+    return lazy_decider
+
+
+@_maybe_uwsgi
 def log_line(stream, line):
     """Log a single line to the global logger(s). If the line contains
     any newline characters each line will be logged as a separate message.
