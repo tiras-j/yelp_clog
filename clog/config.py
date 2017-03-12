@@ -56,6 +56,10 @@ settings are supported:
 
     **localS3**
         If True, will fetch s3 files directly rather than talking to a service.
+
+    **uwsgi_enable_offload**
+        flag to enable offloading global_state logging actions to mule1 process.
+        Defaults to False.
 """
 import os
 
@@ -107,6 +111,10 @@ localS3 = clog_namespace.get_bool('localS3',
 use_kafka = clog_namespace.get_bool('use_kafka',
     default=False,
     help='If True, will tail from a stream via a service talking to Kafka')
+
+uwsgi_enable_offload = clog_namespace.get_bool('uwsgi_enable_offload',
+    default=False,
+    help='If True, all global_state logging actions will execute in mule1 process')
 
 is_logging_configured = False
 

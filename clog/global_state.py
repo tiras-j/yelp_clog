@@ -72,6 +72,36 @@ def reset_default_loggers():
     loggers = None
 
 
+def _maybe_uwsgi(func):
+    """
+    Decorator which defers binding of 'log_line' function until first call when
+    configs have been injected. Unfortunately we can't bind at decoration time
+    if we want uwsgi offloading to be configurable. Alternatively, if we wanted
+    to force offloading in the presence of uwsgi we could skip this manual
+    binding step which would be much cleaner.
+
+    The returned wrapper function is consumed on the first call and monkey patches
+    `clog` and `clog.global_state` to use the configured function
+    """
+    try:
+        import uwsgi
+        import uwsgidecorators
+        import clog
+    except ImportError:
+        return func
+
+    uwsgi_mule_func = uwsgidecorators.mulefunc(1)(func)
+
+    def wrapper(*args, **kwargs):
+        # Let's not dispatch logging calls that already occur inside a mule to mule1
+        # hence the uwsgi.worker_id() > 0 check for the offload target
+        target = uwsgi_mule_func if config.uwsgi_enable_offload and uwsgi.worker_id() > 0 else func
+        map(lambda x: setattr(x, func.__name__, target), (clog, clog.global_state))
+        return target(*args, **kwargs)
+    return wrapper
+
+
+@_maybe_uwsgi
 def log_line(stream, line):
     """Log a single line to the global logger(s). If the line contains
     any newline characters each line will be logged as a separate message.
